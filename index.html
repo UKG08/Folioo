@@ -599,6 +599,90 @@ body::before{
 ::-webkit-scrollbar{width:3px;height:3px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--border3);border-radius:2px}
+
+/* ══════════════════════════════════════════════════════════
+   RESPONSIVE
+   ══════════════════════════════════════════════════════════ */
+
+/* iOS-safe viewport height */
+html,body{height:calc(var(--vh,1vh) * 100)}
+.shell{height:calc(var(--vh,1vh) * 100)}
+
+/* ── Bottom mobile nav (hidden by default) ── */
+.mobile-nav{
+  display:none;
+  flex-shrink:0;height:58px;
+  border-top:1px solid var(--border2);
+  background:rgba(8,8,9,0.98);backdrop-filter:blur(20px);
+  align-items:stretch;
+  padding-bottom:env(safe-area-inset-bottom,0);
+}
+.mnav-btn{
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:3px;background:none;border:none;color:var(--text3);
+  font-family:var(--f-mono);font-size:9px;letter-spacing:0.05em;text-transform:uppercase;
+  cursor:pointer;position:relative;transition:color 0.2s;
+}
+.mnav-btn .mnav-ic{font-size:16px;line-height:1}
+.mnav-btn.act{color:var(--amber)}
+.mnav-btn.act::before{
+  content:'';position:absolute;top:0;left:26%;right:26%;height:2px;
+  background:var(--amber);border-radius:0 0 3px 3px;
+}
+.mnav-dot{
+  position:absolute;top:6px;right:calc(50% - 20px);
+  width:6px;height:6px;border-radius:50%;background:var(--amber);
+  box-shadow:0 0 6px var(--amber);display:none;
+}
+.mnav-btn.has-badge .mnav-dot{display:block}
+
+/* Tablet: narrow the side rails a touch, keep 3-col */
+@media (max-width:1080px){
+  .right{width:320px}
+}
+@media (max-width:960px){
+  .left{width:230px}
+  .right{width:290px}
+}
+
+/* Mobile: single-panel view with bottom nav */
+@media (max-width:880px){
+  .topbar{padding:0 14px;gap:10px}
+  .wordmark{font-size:19px}
+  .tb-badge{font-size:9px;padding:3px 9px}
+  .tb-status span{display:none}
+
+  .body{position:relative;overflow:hidden}
+  .resize{display:none !important}
+
+  .left,.mid,.right{
+    width:100% !important;flex-shrink:0;border-right:none;
+    position:absolute;inset:0;
+    display:none;
+  }
+  .mid{border-right:none}
+
+  .body.view-docs .left{display:flex}
+  .body.view-viewer .mid{display:flex}
+  .body.view-chat .right{display:flex}
+
+  .mobile-nav{display:flex}
+
+  .pdf-wrap{padding:14px}
+  .chat-msgs{padding:16px 12px}
+  .msg{max-width:94%}
+
+  .uz{margin:12px}
+  .info-card{margin:12px}
+}
+
+@media (max-width:420px){
+  .wordmark{font-size:17px}
+  .tb-badge{display:none}
+  .wc-title{font-size:18px}
+  .wc-sub{font-size:11px}
+  .chip{padding:5px 11px;font-size:10px}
+}
 </style>
 </head>
 <body>
@@ -692,6 +776,19 @@ body::before{
       </div>
     </div>
   </div>
+
+  <!-- MOBILE BOTTOM NAV -->
+  <nav class="mobile-nav" id="mobile-nav">
+    <button class="mnav-btn act" id="mnav-docs" onclick="setMobileView('docs')">
+      <span class="mnav-ic">☰</span>Files<span class="mnav-dot"></span>
+    </button>
+    <button class="mnav-btn" id="mnav-viewer" onclick="setMobileView('viewer')">
+      <span class="mnav-ic">▤</span>Viewer
+    </button>
+    <button class="mnav-btn" id="mnav-chat" onclick="setMobileView('chat')">
+      <span class="mnav-ic">✦</span>Chat
+    </button>
+  </nav>
 </div>
 
 <!-- TOAST -->
@@ -714,11 +811,57 @@ let currentTab = 'upload'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'
 
+// ─── RESPONSIVE / MOBILE ───────────────────────────────────────
+let mobileView = 'docs'
+const MOBILE_BREAKPOINT = 880
+
+function __isMobile() { return window.innerWidth <= MOBILE_BREAKPOINT }
+window.__isMobile = __isMobile
+
+function setMobileView(view) {
+  mobileView = view
+  const body = document.querySelector('.body')
+  body.classList.remove('view-docs', 'view-viewer', 'view-chat')
+  body.classList.add('view-' + view)
+  document.querySelectorAll('.mnav-btn').forEach(b => b.classList.remove('act'))
+  const btn = document.getElementById('mnav-' + view)
+  if (btn) btn.classList.add('act')
+  // re-render the PDF page so it fits the now-visible container
+  if (view === 'viewer' && pdfDoc) renderPage()
+}
+
+function setAppHeight() {
+  const vh = window.innerHeight * 0.01
+  document.documentElement.style.setProperty('--vh', `${vh}px`)
+}
+
+function applyResponsiveMode() {
+  setAppHeight()
+  const body = document.querySelector('.body')
+  if (__isMobile()) {
+    if (!body.classList.contains('view-docs') && !body.classList.contains('view-viewer') && !body.classList.contains('view-chat')) {
+      setMobileView(mobileView)
+    }
+  } else {
+    body.classList.remove('view-docs', 'view-viewer', 'view-chat')
+    if (pdfDoc) renderPage()
+  }
+}
+
+let _resizeTimer
+window.addEventListener('resize', () => {
+  clearTimeout(_resizeTimer)
+  _resizeTimer = setTimeout(applyResponsiveMode, 120)
+})
+window.addEventListener('orientationchange', applyResponsiveMode)
+
 // ─── INIT ────────────────────────────────────────────────────
 window.onload = () => {
   renderTab()
   setupResizers()
   setupChat()
+  setAppHeight()
+  if (__isMobile()) setMobileView('docs')
 }
 
 // ─── TABS ────────────────────────────────────────────────────
@@ -957,12 +1100,20 @@ async function selectDoc(name, providedPdfDoc) {
 
   document.getElementById('scope-sel').value = name
   renderTab()
+  if (window.__isMobile && window.__isMobile()) setMobileView('viewer')
 }
 
 async function renderPage() {
   if (!pdfDoc) return
   const pg = await pdfDoc.getPage(page)
-  const vp = pg.getViewport({ scale: zoom })
+  const baseVp = pg.getViewport({ scale: 1 })
+  const wrap = document.getElementById('pdf-wrap')
+  let effScale = zoom
+  if (window.__isMobile && window.__isMobile()) {
+    const available = wrap.clientWidth - 24
+    effScale = Math.min(zoom, available / baseVp.width)
+  }
+  const vp = pg.getViewport({ scale: effScale })
   const canvas = document.getElementById('pdf-canvas')
   canvas.width = vp.width; canvas.height = vp.height
   await pg.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise
@@ -1001,6 +1152,8 @@ async function sendMessage() {
   const ta = document.getElementById('msg-ta')
   const q = ta.value.trim()
   if (!q || busy) return
+
+  if (window.__isMobile && window.__isMobile()) setMobileView('chat')
 
   const scope = document.getElementById('scope-sel').value
   ta.value = ''; ta.style.height = 'auto'; setBusy(true)
@@ -1206,6 +1359,8 @@ function updateDocBadge() {
   const lb = document.getElementById('lib-badge')
   if (docs.length > 0) { lb.textContent = docs.length; lb.style.display = 'inline-flex' }
   else lb.style.display = 'none'
+  const mnavDocs = document.getElementById('mnav-docs')
+  if (mnavDocs) mnavDocs.classList.toggle('has-badge', docs.length > 0)
 }
 
 function updateHistBadge() {
@@ -1263,6 +1418,7 @@ function setupResizers() {
 function makeResizer(resId, leftId, rightId, minL, maxL, minR, maxR) {
   const res = document.getElementById(resId)
   res.addEventListener('mousedown', e => {
+    if (window.__isMobile && window.__isMobile()) return
     e.preventDefault()
     const lp = document.getElementById(leftId)
     const rp = document.getElementById(rightId)
